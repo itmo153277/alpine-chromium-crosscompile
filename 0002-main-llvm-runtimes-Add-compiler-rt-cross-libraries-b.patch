@@ -1,0 +1,106 @@
+From 0e28316f419fbb202984dfcff32eea66649541d4 Mon Sep 17 00:00:00 2001
+From: Viktor Ivanov <viktprog@gmail.com>
+Date: Fri, 13 Nov 2026 03:57:41 +0900
+Subject: [PATCH 2/3] [main/llvm-runtimes] Add compiler-rt cross-libraries
+ bootstrap
+
+---
+ main/llvm-runtimes/APKBUILD | 50 +++++++++++++++++++++++++++----------
+ 1 file changed, 37 insertions(+), 13 deletions(-)
+
+diff --git a/main/llvm-runtimes/APKBUILD b/main/llvm-runtimes/APKBUILD
+index d3d04d53..7a4d20b9 100644
+--- a/main/llvm-runtimes/APKBUILD
++++ b/main/llvm-runtimes/APKBUILD
+@@ -22,15 +22,20 @@ makedepends="
+ 	python3
+ 	samurai
+ 	"
+-subpackages="
+-	libc++:libcxx
+-	libc++-static:libcxx_static
+-	libc++-dev:libcxx_dev
+-	compiler-rt:rt
+-	llvm-libunwind:libunwind
+-	llvm-libunwind-static:libunwind_static
+-	llvm-libunwind-dev:libunwind_dev
+-	"
++if [ -z "$BOOTSTRAP" ] ; then
++	subpackages="
++		libc++:libcxx
++		libc++-static:libcxx_static
++		libc++-dev:libcxx_dev
++		compiler-rt:rt
++		llvm-libunwind:libunwind
++		llvm-libunwind-static:libunwind_static
++		llvm-libunwind-dev:libunwind_dev
++		"
++else
++	pkgname="$pkgname-cross"
++	subpackages="compiler-rt-$CARCH:rt:$CBUILD_ARCH"
++fi
+ source="https://github.com/llvm/llvm-project/releases/download/llvmorg-$_pkgver/llvm-project-$_pkgver.src.tar.xz
+ 	armv6-arch.patch.noauto
+ 	compiler-rt-lsan-dtp-offset.patch
+@@ -71,6 +76,12 @@ build() {
+ 			"
+ 	fi
+ 
++	if [ -z "$BOOTSTRAP" ] ; then
++		local runtimes="compiler-rt;libunwind;libcxx;libcxxabi"
++	else
++		local runtimes="compiler-rt"
++	fi
++
+ 	if [ "$CARCH" = "armhf" ]; then
+ 		# Requires Thumb2, which we don't require
+ 		local opts="-DCOMPILER_RT_ARM_OPTIMIZED_FP=OFF"
+@@ -81,11 +92,16 @@ build() {
+ 	CFLAGS="$CFLAGS -DNDEBUG -DSANITIZER_CAN_USE_PREINIT_ARRAY=0" \
+ 	CXXFLAGS="$CXXFLAGS -DNDEBUG -DSANITIZER_CAN_USE_PREINIT_ARRAY=0" \
+ 	cmake -B build -G Ninja -Wno-dev -S runtimes \
+-		-DLLVM_ENABLE_RUNTIMES="compiler-rt;libunwind;libcxx;libcxxabi" \
++		-DLLVM_ENABLE_RUNTIMES="$runtimes" \
++		-DLLVM_RUNTIME_TARGETS="$CHOST" \
+ 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+ 		-DCMAKE_INSTALL_PREFIX=/usr \
++		-DCMAKE_ASM_COMPILER_TARGET="$CHOST" \
++		-DCMAKE_C_COMPILER_TARGET="$CHOST" \
++		-DCMAKE_CXX_COMPILER_TARGET="$CHOST" \
+ 		-DLIBCXX_HAS_MUSL_LIBC=ON \
+ 		-DLIBUNWIND_HAS_NODEFAULTLIBS_FLAG=OFF \
++		-DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+ 		-DCOMPILER_RT_INCLUDE_TESTS="$(want_check && echo ON || echo OFF)" \
+ 		-DCOMPILER_RT_BUILD_SANITIZERS=$_build_sanitizers \
+ 		-DCOMPILER_RT_INSTALL_PATH="/usr/lib/llvm$_llvmver/lib/clang/$_llvmver" \
+@@ -99,7 +115,6 @@ package() {
+ 	# create target triple dir and a relative symlink to it
+ 	local clangruntimedir="/usr/lib/llvm$_llvmver/lib/clang/$_llvmver/lib/$CHOST"
+ 	install -dm0755 "$pkgdir"/"$clangruntimedir"
+-	ln -s "${clangruntimedir##*/}" "$pkgdir"/"${clangruntimedir%/*}"/linux
+ 
+ 	DESTDIR="$pkgdir" cmake --install build
+ 
+@@ -131,8 +146,17 @@ libunwind_dev() {
+ rt() {
+ 	pkgdesc="LLVM compiler-rt runtime libraries"
+ 	# prefix with 0.0 for easy migration to clang-rtlib when this ver no longer tracks default Clang
+-	provides="clang$_llvmver-rtlib=0.0.$pkgver-r$pkgrel"
+-
++	if [ -z "$BOOTSTRAP" ] ; then
++		provides="clang$_llvmver-rtlib=0.0.$pkgver-r$pkgrel"
++	else
++		provides="clang$_llvmver-rtlib-$CARCH=0.0.$pkgver-r$pkgrel"
++		rm -rf usr/lib/llvm$_llvmver/lib/clang/$_llvmver/include
++	fi
++ 
++	for file in "usr/lib/llvm$_llvmver/lib/clang/$_llvmver/lib/linux/"* ; do
++		base=$(basename $file)
++		ln -sv "../linux/$base" "usr/lib/llvm$_llvmver/lib/clang/$_llvmver/lib/$CHOST/"
++	done
+ 	amove usr/lib/llvm$_llvmver/lib/clang/$_llvmver
+ }
+ 
+-- 
+2.43.0
+

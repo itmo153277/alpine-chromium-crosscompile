@@ -1,0 +1,333 @@
+From 63af994f8ef77847f46d43c50903b796fb0b57b4 Mon Sep 17 00:00:00 2001
+From: Viktor Ivanov <viktprog@gmail.com>
+Date: Fri, 13 Nov 2026 04:02:30 +0900
+Subject: [PATCH 3/3] [community/chromium] Add chromium cross-compilation
+
+---
+ community/chromium/APKBUILD | 205 +++++++++++++++++++++++++++++++-----
+ 1 file changed, 177 insertions(+), 28 deletions(-)
+
+diff --git a/community/chromium/APKBUILD b/community/chromium/APKBUILD
+index eb803703..b6b9b131 100644
+--- a/community/chromium/APKBUILD
++++ b/community/chromium/APKBUILD
+@@ -14,7 +14,7 @@ _typescript=6.0.3
+ pkgdesc="Chromium web browser"
+ url="https://www.chromium.org/Home"
+ # armv7: OOMs on linking on builders
+-arch="aarch64 x86_64"
++arch="aarch64 x86_64 armv7"
+ license="BSD-3-Clause"
+ # explicit depends for --headless
+ # XXX: eudev-libs replaced by so:libudev.so.1 to allow installation with libudev-zero
+@@ -30,38 +30,26 @@ depends="
+ 	xdg-utils
+ 	"
+ _llvmver=22
+-makedepends="
++makedepends_host="
+ 	alsa-lib-dev
+-	bash
+-	bison
+ 	bsd-compat-headers
+ 	brotli-dev
+ 	bzip2-dev
+ 	cairo-dev
+ 	clang$_llvmver-dev
+-	clang$_llvmver-extra-tools
+-	clang$_llvmver-rtlib
+ 	crc32c-dev
+ 	cups-dev
+ 	curl-dev
+ 	dav1d-dev
+ 	dbus-glib-dev
+ 	double-conversion-dev
+-	elfutils
+ 	elfutils-dev
+-	esbuild
+ 	eudev-dev
+ 	ffmpeg-dev
+-	findutils
+ 	flac-dev
+ 	flatbuffers-dev
+-	flex
+ 	freetype-dev
+-	gn
+-	go
+-	gperf
+ 	gtk+3.0-dev
+-	gzip
+ 	harfbuzz-dev
+ 	hunspell-dev
+ 	hwdata-dev
+@@ -88,39 +76,54 @@ makedepends="
+ 	libxscrnsaver-dev
+ 	libxslt-dev
+ 	linux-headers
+-	lld$_llvmver
+-	llvm$_llvmver
+ 	mesa-dev
+ 	minizip-dev
+-	mold
+-	nodejs
+ 	nss-dev
+ 	openh264-dev
+ 	opus-dev
+ 	pciutils-dev
+-	perl
+ 	pipewire-dev
+ 	pulseaudio-dev
+-	py3-setuptools
+-	python3
+ 	qt6-qtbase-dev
+ 	re2-dev
+-	rust-bindgen
+-	chromium-rust-src
+-	chromium-rustc-dev
+-	chromium-rustfmt
+-	samurai
+ 	simdutf-dev
+ 	snappy-dev
+ 	speex-dev
+ 	spirv-tools-dev
+ 	sqlite-dev
+-	typescript-go
+ 	woff2-dev
+ 	xcb-proto
+ 	zlib-dev
+ 	zstd-dev
+ 	"
++makedepends_build="
++	$makedepends_host
++	bash
++	bison
++	clang$_llvmver-extra-tools
++	clang$_llvmver-rtlib
++	elfutils
++	esbuild
++	findutils
++	flex
++	gn
++	go
++	gperf
++	gzip
++	lld$_llvmver
++	llvm$_llvmver
++	mold
++	nodejs
++	perl
++	py3-setuptools
++	python3
++	rust-bindgen
++	chromium-rust-src
++	chromium-rustc-dev
++	chromium-rustfmt
++	samurai
++	typescript-go
++	"
+ checkdepends="xvfb-run"
+ subpackages="
+ 	$pkgname-common
+@@ -215,6 +218,54 @@ x86_64|aarch64)
+ 	;;
+ esac
+ 
++if [ "$CBUILD" != "$CHOST" ]; then
++	options="$options !check"
++	makedepends_build="
++		$makedepends_build
++		clang$_llvmver-rtlib-$CARCH
++		"
++	# snapshot_arch must be executable from the build system
++	# you must set it up manually
++	case "$CBUILD_ARCH-$CARCH" in
++	x86_64-armv7)
++		_snapshot_arch=x86
++		;;
++	aarch64-x86)
++		_snapshot_arch=armv7
++		;;
++	x86-armv7)
++		_snapshot_arch=x86
++		;;
++	armv7-x86)
++		_snapshot_arch=armv7
++		;;
++	x86_64-aarch64)
++		_snapshot_arch=x86_64
++		;;
++	aarch64-x86_64)
++		_snapshot_arch=aarch64
++		;;
++	x86_64-x86)
++		_snapshot_arch=x86
++		;;
++	aarch64-armv7)
++		_snapshot_arch=armv7
++		;;
++	*)
++		_snapshot_arch="$CARCH"
++		;;
++	esac
++	if [ "$_snapshot_arch" != "$CARCH" ] && [ "$_snapshot_arch" != "$CBUILD_ARCH" ]; then
++		# need a thrid toolset
++		# you must set it up and install sysroot deps manually (make sure clang works!)
++		makedepends_build="
++			$makedepends_build
++			build-base-$_snapshot_arch
++			clang$_llvmver-rtlib-$_snapshot_arch
++			"
++	fi
++fi
++
+ # secfixes:
+ #   144.0.7559.132-r4:
+ #     - CVE-2026-3536
+@@ -650,6 +701,15 @@ _prepare() {
+ 
+ 	(
+ 		cd tools/crates/gnrt
++		CC="$BUILDCC" \
++		CXX="$BUILDCXX" \
++		LD="$BUILDLD" \
++		CFLAGS="$BUILDCFLAGS" \
++		CXXFLAGS="$BUILDCXXFLAGS" \
++		CPPFLAGS="$BUILDCPPFLAGS" \
++		LDFLAGS="$BUILDLDFLAGS" \
++		PKG_CONFIG_PATH=/usr/lib/pkgconfg:/usr/share/pkgconfig \
++		PKG_CONFIG_SYSROOT_DIR=/ \
+ 		cargo build --locked --release
+ 	)
+ 	# Generates gn workflows for building
+@@ -725,6 +785,32 @@ _prepare() {
+ 		third_party/libxml/chromium/*.cc
+ 
+ 	echo "$CTARGET" >> build/rust/known-target-triples.txt
++	# force host cpu on host toolchain
++	sed -i '/host/,/current_cpu/s/= current_cpu/= host_cpu/' \
++		build/toolchain/linux/unbundle/BUILD.gn
++	if [ "$CBUILD" != "$CHOST" ]; then
++		case "$_snapshot_arch" in
++		x86_64)
++			local snapshot_cpu="x64"
++			;;
++		aarch64)
++			local snapshot_cpu="arm64"
++			;;
++		armv7)
++			local snapshot_cpu="arm"
++			;;
++		*)
++			local snapshot_cpu="$_snapshot_arch"
++			;;
++		esac
++		# snapshot toolchain based on host
++		sed -n '/host/,/^}/{s/host/snapshot/g;p}' \
++			build/toolchain/linux/unbundle/BUILD.gn | \
++			sed "s/snapshot_cpu/\"$snapshot_cpu\"\nv8_current_cpu=v8_target_cpu/" >> \
++			build/toolchain/linux/unbundle/BUILD.gn
++		arch_to_triplet "$_snapshot_arch" >> build/rust/known-target-triples.txt
++		echo "$CBUILD" >> build/rust/known-target-triples.txt
++	fi
+ }
+ 
+ _configure() {
+@@ -769,7 +855,7 @@ _configure() {
+ 		;;
+ 	esac
+ 
+-	case "$CARCH" in
++	case "$CBUILD_ARCH" in
+ 	armv7)
+ 		local gn_threads=--threads=1
+ 		;;
+@@ -787,6 +873,60 @@ _configure() {
+ 		;;
+ 	esac
+ 
++	local cross_options=""
++	if [ "$CBUILD" != "$CHOST" ]; then
++		case "$CARCH" in
++		x86_64)
++			local target_cpu="x64"
++			;;
++		aarch64)
++			local target_cpu="arm64"
++			;;
++		armv7)
++			local target_cpu="arm"
++			;;
++		*)
++			local target_cpu="$CARCH"
++			;;
++		esac
++		case "$CARCH" in
++		x86_64)
++			export CFLAGS="$CFLAGS -fno-plt"
++			export CXXFLAGS="$CXXFLAGS -fno-plt"
++			;;
++		*)
++			export CFLAGS="${CFLAGS/-fno-plt}"
++			export CXXFLAGS="${CXXFLAGS/-fno-plt}"
++			;;
++		esac
++		if [ "$_snapshot_arch" = "$CARCH" ] ; then
++			local v8_toolchain="default"
++		else
++			local v8_toolchain="snapshot"
++		fi
++		cross_options="
++			target_cpu=\"$target_cpu\"
++			target_os=\"linux\"
++			target_sysroot=\"$CBUILDROOT\"
++			host_toolchain=\"//build/toolchain/linux/unbundle:host\"
++			v8_snapshot_toolchain=\"//build/toolchain/linux/unbundle:$v8_toolchain\"
++			"
++		export BUILD_AR="$AR"
++		export BUILD_CC="$CC"
++		export BUILD_CXX="$CXX"
++		export BUILD_NM="$NM"
++		export BUILD_CFLAGS="${BUILDCFLAGS/-g/} -Wno-unknown-warning-option -Wno-builtin-macro-redefined"
++		export BUILD_CXXFLAGS="${BUILDCXXFLAGS/-g/} -Wno-unknown-warning-option -Wno-builtin-macro-redefined"
++		export BUILD_CPPFLAGS="${BUILDCPPFLAGS/-g/} -D__DATE__=  -D__TIME__=  -D__TIMESTAMP__="
++		export BUILD_LDFLAGS="$BUILDLDFLAGS"
++		export BUILD_CXXFLAGS="${BUILD_CXXFLAGS/-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST/}"
++		export BUILD_CXXFLAGS="${BUILD_CXXFLAGS/-D_GLIBCXX_ASSERTIONS=1}"
++		export BUILD_CXXFLAGS="${BUILD_CXXFLAGS/-fstack-clash-protection}"
++		export BUILD_CFLAGS="${BUILD_CFLAGS/-fstack-clash-protection}"
++		export BUILD_CXXFLAGS="${BUILD_CXXFLAGS/-fno-plt}"
++		export BUILD_CFLAGS="${BUILD_CFLAGS/-fno-plt}"
++	fi
++
+ 	# shellcheck disable=2089
+ 	local gn_config="
+ 		blink_enable_generated_code_formatting=false
+@@ -837,9 +977,11 @@ _configure() {
+ 		use_thin_lto=false
+ 		use_vaapi=$vaapi
+ 		v8_use_metagen_instance_types=false
++		$cross_options
+ 		"
+ 
+ 	# shellcheck disable=2090,2116
++	PKG_CONFIG_SYSROOT_DIR='' \
+ 	gn gen out/bld $gn_threads --args="$(echo $gn_config)"
+ }
+ 
+@@ -850,6 +992,13 @@ build() {
+ 	ulimit -n 4096
+ 
+ 	# shellcheck disable=2046
++	CC="$BUILDCC" \
++	CXX="$BUILDCXX" \
++	LD="$BUILDLD" \
++	CFLAGS="$BUILDCFLAGS" \
++	CXXFLAGS="$BUILDCXXFLAGS" \
++	CPPFLAGS="$BUILDCPPFLAGS" \
++	LDFLAGS="$BUILDLDFLAGS" \
+ 	ninja -C out/bld \
+ 		chrome \
+ 		chrome_sandbox \
+-- 
+2.43.0
+
