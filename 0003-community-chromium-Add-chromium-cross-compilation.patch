@@ -1,17 +1,17 @@
-From 63af994f8ef77847f46d43c50903b796fb0b57b4 Mon Sep 17 00:00:00 2001
+From c785ba15ea98a6243cce4dbc69942645a45f21ec Mon Sep 17 00:00:00 2001
 From: Viktor Ivanov <viktprog@gmail.com>
 Date: Fri, 13 Nov 2026 04:02:30 +0900
-Subject: [PATCH 3/3] [community/chromium] Add chromium cross-compilation
+Subject: [PATCH 3/3] community/chromium: add chromium cross-compilation
 
 ---
  community/chromium/APKBUILD | 205 +++++++++++++++++++++++++++++++-----
  1 file changed, 177 insertions(+), 28 deletions(-)
 
 diff --git a/community/chromium/APKBUILD b/community/chromium/APKBUILD
-index eb803703..b6b9b131 100644
+index 0ba9283b..0f3a2f31 100644
 --- a/community/chromium/APKBUILD
 +++ b/community/chromium/APKBUILD
-@@ -14,7 +14,7 @@ _typescript=6.0.3
+@@ -13,7 +13,7 @@ _testfonts=a28b222b79851716f8358d2800157d9ffe117b3545031ae51f69b7e1e1b9a969
  pkgdesc="Chromium web browser"
  url="https://www.chromium.org/Home"
  # armv7: OOMs on linking on builders
@@ -20,7 +20,7 @@ index eb803703..b6b9b131 100644
  license="BSD-3-Clause"
  # explicit depends for --headless
  # XXX: eudev-libs replaced by so:libudev.so.1 to allow installation with libudev-zero
-@@ -30,38 +30,26 @@ depends="
+@@ -29,38 +29,26 @@ depends="
  	xdg-utils
  	"
  _llvmver=22
@@ -55,12 +55,12 @@ index eb803703..b6b9b131 100644
 -	gn
 -	go
 -	gperf
- 	gtk+3.0-dev
+ 	gtk4.0-dev
 -	gzip
  	harfbuzz-dev
  	hunspell-dev
  	hwdata-dev
-@@ -88,39 +76,54 @@ makedepends="
+@@ -87,39 +75,54 @@ makedepends="
  	libxscrnsaver-dev
  	libxslt-dev
  	linux-headers
@@ -128,7 +128,7 @@ index eb803703..b6b9b131 100644
  checkdepends="xvfb-run"
  subpackages="
  	$pkgname-common
-@@ -215,6 +218,54 @@ x86_64|aarch64)
+@@ -214,6 +217,54 @@ x86_64|aarch64)
  	;;
  esac
  
@@ -183,7 +183,7 @@ index eb803703..b6b9b131 100644
  # secfixes:
  #   144.0.7559.132-r4:
  #     - CVE-2026-3536
-@@ -650,6 +701,15 @@ _prepare() {
+@@ -649,6 +700,15 @@ _prepare() {
  
  	(
  		cd tools/crates/gnrt
@@ -199,7 +199,7 @@ index eb803703..b6b9b131 100644
  		cargo build --locked --release
  	)
  	# Generates gn workflows for building
-@@ -725,6 +785,32 @@ _prepare() {
+@@ -724,6 +784,32 @@ _prepare() {
  		third_party/libxml/chromium/*.cc
  
  	echo "$CTARGET" >> build/rust/known-target-triples.txt
@@ -232,7 +232,7 @@ index eb803703..b6b9b131 100644
  }
  
  _configure() {
-@@ -769,7 +855,7 @@ _configure() {
+@@ -768,7 +854,7 @@ _configure() {
  		;;
  	esac
  
@@ -241,7 +241,7 @@ index eb803703..b6b9b131 100644
  	armv7)
  		local gn_threads=--threads=1
  		;;
-@@ -787,6 +873,60 @@ _configure() {
+@@ -786,6 +872,60 @@ _configure() {
  		;;
  	esac
  
@@ -305,7 +305,7 @@ index eb803703..b6b9b131 100644
 @@ -837,9 +977,11 @@ _configure() {
  		use_thin_lto=false
  		use_vaapi=$vaapi
- 		v8_use_metagen_instance_types=false
+ 		v8_use_metagen=false
 +		$cross_options
  		"
  

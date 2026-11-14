@@ -1,7 +1,7 @@
-From 0e28316f419fbb202984dfcff32eea66649541d4 Mon Sep 17 00:00:00 2001
+From 65de597114597e68f623b1e45757f72ba42f7f62 Mon Sep 17 00:00:00 2001
 From: Viktor Ivanov <viktprog@gmail.com>
 Date: Fri, 13 Nov 2026 03:57:41 +0900
-Subject: [PATCH 2/3] [main/llvm-runtimes] Add compiler-rt cross-libraries
+Subject: [PATCH 2/3] main/llvm-runtimes: add compiler-rt cross-libraries
  bootstrap
 
 ---
