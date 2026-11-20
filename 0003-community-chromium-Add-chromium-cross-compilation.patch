@@ -1,14 +1,14 @@
-From 5e51b2e170d4904113dfbc126634f37883150a90 Mon Sep 17 00:00:00 2001
+From f5b4f6dab5bab20b16f271e82acde21d51a147f2 Mon Sep 17 00:00:00 2001
 From: Viktor Ivanov <viktprog@gmail.com>
 Date: Fri, 13 Nov 2026 04:02:30 +0900
 Subject: [PATCH 3/3] community/chromium: add chromium cross-compilation
 
 ---
- community/chromium/APKBUILD | 216 +++++++++++++++++++++++++++++++-----
- 1 file changed, 187 insertions(+), 29 deletions(-)
+ community/chromium/APKBUILD | 215 +++++++++++++++++++++++++++++++-----
+ 1 file changed, 186 insertions(+), 29 deletions(-)
 
 diff --git a/community/chromium/APKBUILD b/community/chromium/APKBUILD
-index 0ba9283b..341b3c96 100644
+index c2e4d771..4277ac44 100644
 --- a/community/chromium/APKBUILD
 +++ b/community/chromium/APKBUILD
 @@ -13,7 +13,7 @@ _testfonts=a28b222b79851716f8358d2800157d9ffe117b3545031ae51f69b7e1e1b9a969
@@ -60,7 +60,7 @@ index 0ba9283b..341b3c96 100644
  	harfbuzz-dev
  	hunspell-dev
  	hwdata-dev
-@@ -87,39 +75,54 @@ makedepends="
+@@ -86,39 +74,54 @@ makedepends="
  	libxscrnsaver-dev
  	libxslt-dev
  	linux-headers
@@ -183,12 +183,11 @@ index 0ba9283b..341b3c96 100644
  # secfixes:
  #   144.0.7559.132-r4:
  #     - CVE-2026-3536
-@@ -639,7 +690,16 @@ _prepare() {
+@@ -640,7 +691,15 @@ _prepare() {
  	# build_crubit needs it in -intermediate
  	mkdir -p third_party/rust-toolchain-intermediate
  	ln -sv ../../../crubit-$_crubit third_party/rust-toolchain-intermediate/crubit
 -	env -u CARGO_PROFILE_RELEASE_PANIC python3 ./tools/rust/build_crubit.py --skip-checkout
-+	sed -i "/GetHostLinker/,\${s/\bLD/CC/;ta;b;:a n;ba;}" tools/rust/host_tools.py
 +	env -u CARGO_PROFILE_RELEASE_PANIC \
 +		CC="$BUILDCC" \
 +		CXX="$BUILDCXX" \
@@ -201,7 +200,7 @@ index 0ba9283b..341b3c96 100644
  	# gn workflow needs .gni files from crubit tree
  	mkdir -p third_party/rust-toolchain/lib/third_party
  	ln -sv ../../../../../crubit-$_crubit third_party/rust-toolchain/lib/third_party/crubit
-@@ -649,6 +709,15 @@ _prepare() {
+@@ -650,6 +709,15 @@ _prepare() {
  
  	(
  		cd tools/crates/gnrt
@@ -217,7 +216,7 @@ index 0ba9283b..341b3c96 100644
  		cargo build --locked --release
  	)
  	# Generates gn workflows for building
-@@ -724,6 +793,32 @@ _prepare() {
+@@ -724,6 +792,32 @@ _prepare() {
  		third_party/libxml/chromium/*.cc
  
  	echo "$CTARGET" >> build/rust/known-target-triples.txt
@@ -250,7 +249,7 @@ index 0ba9283b..341b3c96 100644
  }
  
  _configure() {
-@@ -768,7 +863,7 @@ _configure() {
+@@ -768,7 +862,7 @@ _configure() {
  		;;
  	esac
  
@@ -259,7 +258,7 @@ index 0ba9283b..341b3c96 100644
  	armv7)
  		local gn_threads=--threads=1
  		;;
-@@ -786,6 +881,60 @@ _configure() {
+@@ -786,6 +880,60 @@ _configure() {
  		;;
  	esac
  
@@ -320,7 +319,7 @@ index 0ba9283b..341b3c96 100644
  	# shellcheck disable=2089
  	local gn_config="
  		blink_enable_generated_code_formatting=false
-@@ -837,9 +986,11 @@ _configure() {
+@@ -837,9 +985,11 @@ _configure() {
  		use_thin_lto=false
  		use_vaapi=$vaapi
  		v8_use_metagen=false
@@ -332,7 +331,7 @@ index 0ba9283b..341b3c96 100644
  	gn gen out/bld $gn_threads --args="$(echo $gn_config)"
  }
  
-@@ -850,6 +1001,13 @@ build() {
+@@ -850,6 +1000,13 @@ build() {
  	ulimit -n 4096
  
  	# shellcheck disable=2046
